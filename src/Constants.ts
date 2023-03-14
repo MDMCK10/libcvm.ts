@@ -10,6 +10,7 @@ export function CalculatePermissions(val : number) : Permissions {
 	if (val & 64) { perms.bypass_and_end_turns = true; }
 	if (val & 128) { perms.rename_users = true; }
 	if (val & 256) { perms.copy_ips = true; }
+	if (val & 512) { perms.xss = true; }
 
     return perms;
 }
