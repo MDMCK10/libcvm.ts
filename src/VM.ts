@@ -4,20 +4,26 @@ import { User } from "./User";
 import WebSocket from "ws";
 import { ConnectionOptions } from "./ConnectionOptions";
 import { DefaultHeaders } from "./Constants";
-import { Decode } from "./Guacamole";
+import { Decode, Encode } from "./Guacamole";
 
 export class VM extends EventEmitter {
     screen: Canvas;
     screenContext: CanvasRenderingContext2D;
 
-    name: string;
-
     websocket: WebSocket;
 
     users: User[];
 
-    connect(url: string, options: ConnectionOptions): Promise<VM> {
-        let vm = new VM();
+    url: string;
+    options: ConnectionOptions;
+
+    constructor(url: string, options: ConnectionOptions) {
+        super();
+        this.url = url;
+        this.options = options;
+    }
+
+    public async connect(): Promise<VM> {
         var promiseResolve: (value: VM | PromiseLike<VM>) => void,
             promiseReject: (reason: string) => void;
 
@@ -26,30 +32,40 @@ export class VM extends EventEmitter {
             promiseReject = reject;
         });
 
-        vm.websocket = new WebSocket(url, "guacamole", {
+        var promiseFulfilled: boolean;
+
+        this.websocket = new WebSocket(this.url, "guacamole", {
             headers: DefaultHeaders
         });
 
-        vm.name = options.vmName
+        this.websocket.onopen = () => {
+            this.websocket.send(Encode("rename", this.options.botName));
+            this.websocket.send(Encode("connect", this.options.vmName));
+        };
 
-        vm.websocket.on('message', (data) => {
-            const content = Decode(data.toString());
+        this.websocket.onmessage = (ev) => {
+            const content = Decode(ev.data.toString());
+
             switch (content[0]) {
                 case "connect": {
                     switch (parseInt(content[1])) {
                         case 0: {
+                            this.websocket.close();
+                            this.websocket = null;
+                            promiseFulfilled = true;
                             promiseReject("Server rejected connection.");
                             break;
                         }
                         case 1: {
-                            promiseResolve(vm);
+                            promiseResolve(this);
+                            promiseFulfilled = true;
                         }
                     }
                     break;
                 }
 
                 case "nop": {
-                    vm.websocket.send("3.nop;");
+                    this.websocket.send("3.nop;");
                     break;
                 }
 
@@ -58,11 +74,16 @@ export class VM extends EventEmitter {
                     break;
                 }
             }
-        });
+        };
 
-        vm.websocket.onerror = (err) => promiseReject(err.message);
-
-        promiseResolve(vm);
+        this.websocket.onerror = (err) => {
+            if(!promiseFulfilled) {
+                promiseReject(err.message);
+                promiseFulfilled = true;
+            }else{
+                this.emit("error", err);
+            };
+        };
 
         return promise;
     }
