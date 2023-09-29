@@ -1,8 +1,11 @@
-import { Command } from "./Command";
-
 export class ConnectionOptions {
     botName: string;
     vmName: string;
-    prefix: string;
-    commands: Command[];
+    autologin: boolean = false;
+    password: string;
+    maxReconnectionAttempts: number = 50;
+
+    public constructor(init?:Partial<ConnectionOptions>) {
+        Object.assign(this, init);
+    }
 };
