@@ -8,5 +8,8 @@
     "sourceMap": false,
     "outDir": "dist"
   },
+  "include": [
+    "./src/**/*"
+  ],
   "lib": ["es2017"]
 }
