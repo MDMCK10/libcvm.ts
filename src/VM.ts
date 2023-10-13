@@ -96,6 +96,12 @@ export class VM {
             }
         });
 
+        this.builtinHandlers.set("rename", (instr: string[]) => {
+            if (instr[1] === '1' && instr.length === 5) {
+                this.renameUserReference(instr[2], instr[3]);
+            }
+        });
+
         this.builtinHandlers.set("remuser", (instr: string[]) => {
             this.users = this.users.filter(user => user.username !== instr[2]);
         });
@@ -126,6 +132,13 @@ export class VM {
                 img.src = `data:image/jpeg;base64,${instr[5]}`;
             }
         });
+    }
+
+    private renameUserReference(oldName: string, newName: string) {
+        let user = this.users.find(user => user.username == oldName);
+        if (user !== undefined) {
+            user.username = newName;
+        }
     }
 
     private addOrEditUser(name: string, rank: string) {
@@ -324,7 +337,7 @@ export class VM {
             console.log(`[libcvmts/websocket] Error: ${err.message}.`);
         };
 
-        return new Promise((resolve, reject) => {
+        return new Promise((resolve, _) => {
             let timer = setInterval(() => {
                 if (this.websocket.readyState === 1) {
                     clearInterval(timer)
@@ -334,7 +347,7 @@ export class VM {
                     resolve(this);
                 } else if (this.websocket.readyState == 3) {
                     clearInterval(timer);
-                    reject(`[libcvmts/websocket] Failed to connect to ${this.options.vmName}.`);
+                    this.reconnect();
                 }
             }, 10);
         });
