@@ -250,7 +250,7 @@ export class VM {
 
     public async Mute(username: string, temporary: boolean = false): Promise<boolean> {
         if(!this.users.some(user => user.username === username)) return false;
-        this.websocket.send(Encode("admin", "12", username, temporary ? "0" : "1"));
+        this.websocket.send(Encode("admin", "14", username, temporary ? "0" : "1"));
         return true;
     }
 
