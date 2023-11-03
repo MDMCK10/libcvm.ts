@@ -41,7 +41,6 @@ export class VM {
         // Register default handlers
         this.builtinHandlers.set("nop", () => {
             this.websocket.send("3.nop;");
-            this.nopReceived = Date.now();
         });
 
         this.builtinHandlers.set("vote", (instr: string[]) => {
@@ -82,12 +81,6 @@ export class VM {
                     this.websocket.send(Encode("admin", "2", options.password));
                 }
                 this.connected = true;
-                this.nopTimer = setInterval(() => {
-                    if (Date.now() - this.nopReceived > 10000) {
-                        console.log(`[libcvmts/websocket] No pings received from ${this.options.vmName} in 10 seconds, disconnecting.`);
-                        this.disconnect();
-                    }
-                }, 1000);
                 return false;
             }
         });
@@ -221,7 +214,6 @@ export class VM {
 
     public async disconnect(): Promise<boolean> {
         this.disconnecting = true;
-        clearInterval(this.nopTimer);
         this.websocket.close();
         return new Promise((resolve, _) => {
             let timer = setInterval(() => {
@@ -307,6 +299,7 @@ export class VM {
         });
 
         this.websocket.onopen = () => {
+            this.nopReceived = Date.now();
             this.websocket.onclose = () => {
                 this.users = [];
                 this.connected = false;
@@ -317,11 +310,20 @@ export class VM {
                 }
             };
 
+            this.nopTimer = setInterval(() => {
+                if (Date.now() - this.nopReceived > 10000) {
+                    console.log(`[libcvmts/websocket] No messages received from ${this.options.vmName} in 10 seconds, disconnecting.`);
+                    this.websocket.close();
+                    clearInterval(this.nopTimer);
+                }
+            }, 1000);
+
             this.websocket.send(Encode("rename", this.options.botName));
             this.websocket.send(Encode("connect", this.options.vmName));
         };
 
         this.websocket.onmessage = (ev) => {
+            this.nopReceived = Date.now();
             let content = Decode(ev.data.toString());
             let defaultHandler = this.builtinHandlers.get(content[0]);
             if (defaultHandler !== undefined) {
