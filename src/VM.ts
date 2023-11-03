@@ -87,7 +87,7 @@ export class VM {
                         console.log(`[libcvmts/websocket] No pings received from ${this.options.vmName} in 10 seconds, disconnecting.`);
                         this.disconnect();
                     }
-                }, 10000);
+                }, 1000);
                 return false;
             }
         });
