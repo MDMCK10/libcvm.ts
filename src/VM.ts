@@ -83,7 +83,7 @@ export class VM {
                 }
                 this.connected = true;
                 this.nopTimer = setInterval(() => {
-                    if (this.nopReceived - Date.now() > 10000) {
+                    if (Date.now() - this.nopReceived > 10000) {
                         console.log(`[libcvmts/websocket] No pings received from ${this.options.vmName} in 10 seconds, disconnecting.`);
                         this.disconnect();
                     }
