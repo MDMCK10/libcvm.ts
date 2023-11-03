@@ -25,6 +25,8 @@ export class VM {
 
     connected: boolean = false;
 
+    private nopTimer: NodeJS.Timeout;
+    private nopReceived: number = 0;
     private reconnectTime: number = 1000;
     private reconnecting: boolean = false;
     private disconnecting: boolean = false;
@@ -39,14 +41,15 @@ export class VM {
         // Register default handlers
         this.builtinHandlers.set("nop", () => {
             this.websocket.send("3.nop;");
+            this.nopReceived = Date.now();
         });
 
         this.builtinHandlers.set("vote", (instr: string[]) => {
-            if(instr[1] === '1') {
+            if (instr[1] === '1') {
                 this.voteInfo.time = parseInt(instr[2]);
                 this.voteInfo.yes = parseInt(instr[3]);
                 this.voteInfo.no = parseInt(instr[4]);
-            }else if(instr[1] === '2') {
+            } else if (instr[1] === '2') {
                 this.voteInfo.time = 0;
                 this.voteInfo.yes = 0;
                 this.voteInfo.no = 0;
@@ -54,21 +57,21 @@ export class VM {
         });
 
         this.builtinHandlers.set("admin", (instr: string[]) => {
-            if(instr[1] === '19') {
+            if (instr[1] === '19') {
                 this.copiedIPs.set(instr[2], instr[3]);
             }
         });
 
         this.builtinHandlers.set("turn", (instr: string[]) => {
             let length = parseInt(instr[2]);
-            if(length > 0) {
+            if (length > 0) {
                 this.turnQueue = [];
                 let queue = instr.splice(3, instr.length);
                 queue.forEach(_user => {
                     let user = this.users.find(user => user.username === _user);
                     this.turnQueue.push(user);
                 });
-            }else{
+            } else {
                 this.turnQueue = [];
             }
         });
@@ -79,6 +82,12 @@ export class VM {
                     this.websocket.send(Encode("admin", "2", options.password));
                 }
                 this.connected = true;
+                this.nopTimer = setInterval(() => {
+                    if (this.nopReceived - Date.now() > 10000) {
+                        console.log(`[libcvmts/websocket] No pings received from ${this.options.vmName} in 10 seconds, disconnecting.`);
+                        this.disconnect();
+                    }
+                }, 10000);
                 return false;
             }
         });
@@ -212,6 +221,7 @@ export class VM {
 
     public async disconnect(): Promise<boolean> {
         this.disconnecting = true;
+        clearInterval(this.nopTimer);
         this.websocket.close();
         return new Promise((resolve, _) => {
             let timer = setInterval(() => {
@@ -225,52 +235,52 @@ export class VM {
     }
 
     public async Restore(): Promise<boolean> {
-        if(!this.connected) return false;
+        if (!this.connected) return false;
         this.websocket.send(Encode("admin", "8", this.options.vmName));
         return true;
     }
 
     public async Reboot(): Promise<boolean> {
-        if(!this.connected) return false;
+        if (!this.connected) return false;
         this.websocket.send(Encode("admin", "10", this.options.vmName));
         return true;
     }
 
     public async Kick(username: string): Promise<boolean> {
-        if(!this.users.some(user => user.username === username)) return false;
+        if (!this.users.some(user => user.username === username)) return false;
         this.websocket.send(Encode("admin", "15", username));
         return true;
     }
 
     public async Ban(username: string): Promise<boolean> {
-        if(!this.users.some(user => user.username === username)) return false;
+        if (!this.users.some(user => user.username === username)) return false;
         this.websocket.send(Encode("admin", "12", username));
         return true;
     }
 
     public async Mute(username: string, temporary: boolean = false): Promise<boolean> {
-        if(!this.users.some(user => user.username === username)) return false;
+        if (!this.users.some(user => user.username === username)) return false;
         this.websocket.send(Encode("admin", "14", username, temporary ? "0" : "1"));
         return true;
     }
 
     public async Unmute(username: string): Promise<boolean> {
-        if(!this.users.some(user => user.username === username)) return false;
+        if (!this.users.some(user => user.username === username)) return false;
         this.websocket.send(Encode("admin", "14", username, "2"));
         return true;
     }
 
-    public async copyIP(username: string) : Promise<string | boolean> {
+    public async copyIP(username: string): Promise<string | boolean> {
         let promise: Promise<string | boolean> = new Promise((resolve, _) => {
             let done: boolean = false;
-            if(!this.users.some(user => user.username === username)) {
+            if (!this.users.some(user => user.username === username)) {
                 done = true;
                 resolve(false)
             } else {
                 this.websocket.send(Encode("admin", "19", username));
 
                 let timer = setInterval(() => {
-                    if(this.copiedIPs.has(username)) {
+                    if (this.copiedIPs.has(username)) {
                         clearInterval(timer);
                         done = true;
                         var ip = this.copiedIPs.get(username);
@@ -281,7 +291,7 @@ export class VM {
 
                 setTimeout(() => {
                     clearInterval(timer);
-                    if(!done) {
+                    if (!done) {
                         resolve(null);
                     }
                 }, 30000);
@@ -302,10 +312,7 @@ export class VM {
                 this.connected = false;
                 if (!this.reconnecting && !this.disconnecting) {
                     console.warn(`[libcvmts/websocket] Connection to ${this.options.vmName} lost, reconnecting...`);
-					// BUG: Reconnect logic doesn't work sometimes, so exit for now.
-					// TODO: fix it
-                    process.exit(0);
-					this.reconnecting = true;
+                    this.reconnecting = true;
                     this.reconnect();
                 }
             };
@@ -341,7 +348,7 @@ export class VM {
             let timer = setInterval(() => {
                 if (this.websocket.readyState === 1) {
                     clearInterval(timer)
-                    if(!this.reconnecting) {
+                    if (!this.reconnecting) {
                         console.log(`[libcvmts/websocket] Connected to ${this.options.vmName} successfully.`);
                     }
                     resolve(this);
