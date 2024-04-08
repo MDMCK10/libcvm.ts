@@ -1,15 +1,18 @@
-import { ConnectionOptions, VM } from "../../libcvmts/dist/index";
-import { Encode } from "../../libcvmts/dist/Guacamole";
+import fastifyWebsocket, { SocketStream } from '@fastify/websocket';
+import { ConnectionOptions, VM } from "../../../../dist/index";
+import { User } from "../../../../dist/User";
+import { Rank } from "../../../../dist/Constants";
 import Database from 'better-sqlite3';
 import Fastify from 'fastify';
+import { AutoMod, AutoModAction, AutoModRule } from "./automod";
 
 /* config */
-const botname = "libcvmts";
-const token = "hunter2";
+const botname = "Specialized Egg";
+const token = "test";
 const autologin = true;
 /* end config */
 
-const db = new Database('logs.db');
+const db = new Database('specializedegg.db');
 db.pragma('journal_mode = WAL');
 db.exec("CREATE TABLE IF NOT EXISTS chatlogs (username CHAR, message CHAR, timestamp TEXT, vm CHAR)");
 db.exec("CREATE TABLE IF NOT EXISTS userlogs (username CHAR, ip CHAR, date TEXT, vm CHAR)");
@@ -20,7 +23,113 @@ db.function('regexp', { deterministic: true }, (regex: string, text: string) => 
 const insert_message = db.prepare(`INSERT INTO chatlogs(username, message, timestamp, vm) VALUES(?, ?, datetime('now'), ?)`);
 const insert_user = db.prepare(`INSERT INTO userlogs(username, ip, date, vm) VALUES(?, ?, datetime('now'), ?)`);
 const chatlog_query_default = db.prepare(`SELECT * FROM chatlogs ORDER BY timestamp DESC LIMIT 10`);
-const fastify = Fastify();
+
+const autoMod = new AutoMod();
+autoMod.rules.push((() => {
+    let rule = new AutoModRule();
+    rule.description = "Message contains names of RATs.";
+    rule.check = (_, message: string, __) => {
+        if(message.toLowerCase().includes("anydesk") || message.toLowerCase().includes("teamviewer")
+	|| message.toLowerCase().includes("getscreen") || message.toLowerCase().includes(" rdp ")) {
+            return false;
+        }
+        return true;
+    }
+    return rule;
+})())
+
+const automodTimes = new Map<User, number>();
+
+autoMod.rules.push((() => {
+    let rule = new AutoModRule();
+    rule.check = (user: User, message: string, vm: VM) => {
+        if(/(f!g|fag|f@g|f@9|f4g|f\/-\\g)(got|)(s|)/.test(message.toLowerCase())) {
+	    if(user.rank == Rank.Admin || user.rank == Rank.Moderator) { /*vm.websocket.send(Encode("chat", `@${user.username} You Not Mute from 30 Seconds,Rules: staff`));*/ return true;  }
+	    automodTimes.set(user, (automodTimes.get(user) ?? 0) + 1)
+            if(automodTimes.get(user) >= 2) {
+		rule.description = "Message contains a variation of \"fag\". (ESCALATION)";
+		rule.action = AutoModAction.MUTE_PERM
+		//vm.websocket.send(Encode("chat",`@${user.username} You Mute from 1 Year,Rules: Do not Bad Words`));
+	    }else{
+		rule.description = "Message contains a variation of \"fag\".";
+		rule.action = AutoModAction.MUTE_TEMP
+		//vm.websocket.send(Encode("chat",`@${user.username} You Mute from 30 Seconds,Rules: Do not Bad Words`));
+	    }
+            return false;
+        }
+        return true;
+    }
+    return rule;
+})())
+
+autoMod.rules.push((() => {
+    let rule = new AutoModRule();
+    rule.priority = 10;
+    rule.stopOthers = true;
+    rule.check = (user: User, message: string, vm: VM) => {
+        if(/nig(ger|ga|gah|guh|g)(s|)/.test(message.toLowerCase())) {
+	    if(user.rank == Rank.Admin || user.rank == Rank.Moderator) { /*vm.websocket.send(Encode("chat", `@${user.username} You Not Mute from 30 Seconds,Rules: staff`));*/ return true;  }
+            automodTimes.set(user, (automodTimes.get(user) ?? 0) + 1)
+            if(automodTimes.get(user) >= 2) {
+                rule.description = "Message contains the N word. (ESCALATION)";
+                rule.action = AutoModAction.MUTE_PERM
+                //vm.websocket.send(Encode("chat",`@${user.username} You Mute from 1 Year,Rules: Do not Racism`));
+            }else{
+                rule.description = "Message contains the N word.";
+                rule.action = AutoModAction.MUTE_TEMP
+                //vm.websocket.send(Encode("chat",`@${user.username} You Mute from 30 Seconds,Rules: Do not Racism`));
+            }
+	    return false;
+        }
+        return true;
+    }
+    rule.action = AutoModAction.MUTE_TEMP
+    return rule;
+})())
+
+autoMod.rules.push((() => {
+    let rule = new AutoModRule();
+    rule.priority = 20;
+    rule.stopOthers = true;
+    rule.check = (user: User, _, vm: VM) => {
+        console.log(vm.options.vmName)
+        if(/nig(ger|ga|gah|guh|g)(s|)/.test(user.username.toLowerCase())) {
+	    if(user.rank == Rank.Admin || user.rank == Rank.Moderator) {  return true;  }
+            automodTimes.set(user, (automodTimes.get(user) ?? 0) + 1)
+            if(automodTimes.get(user) >= 2) {
+                rule.description = "Username contains the N word. (ESCALATION)";
+                rule.action = AutoModAction.MUTE_PERM
+            }else{
+                rule.description = "Username contains the N word.";
+                rule.action = AutoModAction.RESET_USERNAME
+            }
+	    return false;
+        }
+        return true;
+    }
+    rule.action = AutoModAction.RESET_USERNAME
+    return rule;
+})())
+
+autoMod.rules.push((() => {
+    let rule = new AutoModRule();
+    rule.description = "Known ban evader";
+    rule.action = AutoModAction.LOG;
+    rule.check = (user: User, _, vm: VM) => {
+        if(user.username.toLowerCase() == "eslamomar" || user.username.toLowerCase() == "jolinho") {
+	    // @ts-ignore
+	    if(!user._banFlagged) {
+	      // @ts-ignore
+	      user._banFlagged = true;
+              return false;
+	    }
+        }
+        return true;
+    }
+    return rule;
+})())
+
+
 let vms: Array<VM> = [];
 const chatlog_query_schema = {
     type: 'object',
@@ -42,6 +151,28 @@ const mod_api_schema = {
     }
 }
 
+let eventConnections : Set<SocketStream> = new Set<SocketStream>();
+
+
+const fastify = Fastify({ trustProxy: true });
+fastify.register(fastifyWebsocket)
+fastify.register(async function (fastify) {
+  fastify.get('/api/v1/mod/events', { schema: { querystring: mod_api_schema }, websocket: true }, (connection, request) => {
+    if(request.query["token"] != token) { 
+        connection.socket.send("Unauthorized. Provide a valid token.");
+        connection.socket.close();
+    }else{
+	console.log(`[specializedegg/fastify/ws] (${request.ip}) Received WS connection.`);
+        eventConnections.add(connection);
+    }
+    
+    connection.socket.on('close', () => {
+	console.log(`[specializedegg/fastify/ws] (${request.ip}) WS connection closed.`)
+        eventConnections.delete(connection);
+    });
+  });
+});
+
 function HTMLDecode(input : string) : string {
     return input.replace(/&lt;/g, "<")
                 .replace(/&gt;/g, ">")
@@ -51,6 +182,15 @@ function HTMLDecode(input : string) : string {
                 .replace(/&#x2F;/g, "/")
                 .replace(/&#13;&#10;/g, "\n");
 }
+
+fastify.get("/api/v1/vms", (request, reply) => {
+    reply.send({
+	status: "success",
+	message: {
+		...vms.map(x=>x.options.vmName).sort()
+	}
+    });
+});
 
 fastify.get("/api/v1/vminfo/:vm", (request, reply) => {
     const vm = vms.find(vm => vm.options.vmName == request.params["vm"]);
@@ -112,7 +252,7 @@ fastify.get("/api/v1/screenshot/:vm",  (request, reply) => {
 });
 
 fastify.get("/api/v1/chatlogs",  { schema: { querystring: chatlog_query_schema } }, (request, reply) => {
-    if(Object.keys(request.query).length === 0) {
+    if(Object.keys(request.query).filter(param => ['vm', 'username', 'from', 'to', 'count', 'regex'].includes(param)).length === 0) {
         let lines = chatlog_query_default.all();
         return reply.send(lines);
     } else {
@@ -287,18 +427,44 @@ fastify.get("/api/v1/mod/getip/:username", { schema: { querystring: mod_api_sche
     return reply.send({status: "success", message: ips });
 });
 
-async function start(vmurl: string, vmname: string) {
+async function start(vmurl: string, vmname: string, pass:string) {
 
     let vm = new VM(vmurl, new ConnectionOptions({
         autologin: autologin,
-        password: token,
+        token: pass,
         botName: botname,
         vmName: vmname
     }));
 
-    vm.registerCustomHandler("chat", (args: string[]) => {
+    vm.registerCustomHandler("chat", async (args: string[]) => {
         if(args.length == 3 && args[1] != '') {
             insert_message.run(args[1], HTMLDecode(args[2]), vm.options.vmName);
+            let user = vm.users.find(x => x.username === args[1]);
+            console.log(vm.options.vmName)
+            console.log(vm.users)
+            console.log(args);
+            let res = autoMod.evaluate(user, HTMLDecode(args[2]), vm);
+            if(res.size > 0) {
+                let announce = {
+                    description: null,
+                    user: user.username,
+                    message: HTMLDecode(args[2]),
+                    ip: await vm.copyIP(user.username),
+                    action: null,
+		    vm: vm.options.vmName
+                };
+
+                let descriptions = [];
+
+                res.forEach((action, description) => {
+                    descriptions.push(description);
+                    announce.action = action;
+                });
+
+                announce.description = descriptions.join("\n");
+
+                autoMod.emitter.emit("event", announce);
+            }
         }
     });
 
@@ -312,6 +478,34 @@ async function start(vmurl: string, vmname: string) {
         }
     });
 
+   vm.registerCustomHandler("rename", async (args: string[]) => {
+	if(args[1] == "1" && args.length == 5) {
+	    let user = vm.users.find(x => x.username === args[3]);
+            let res = autoMod.evaluate(user, "", vm);
+            if(res.size > 0) {
+                let announce = {
+                    description: null,
+                    user: user.username,
+                    message: "(no message, username was flagged)",
+                    ip: await vm.copyIP(user.username),
+                    action: null,
+                    vm: vm.options.vmName
+                };
+
+                let descriptions = [];
+
+                res.forEach((action, description) => {
+                    descriptions.push(description);
+                    announce.action = action;
+                });
+
+                announce.description = descriptions.join("\n");
+
+                autoMod.emitter.emit("event", announce);
+            }
+}
+   });
+
     await vm.connect().catch(err => {
         console.log(err);
     });
@@ -319,15 +513,11 @@ async function start(vmurl: string, vmname: string) {
     vms.push(vm);
 }
 
-start("https://computernewb.com/collab-vm/vm0", "vm0b0t");
-start("https://computernewb.com/collab-vm/vm1", "vm1");
-start("https://computernewb.com/collab-vm/vm2", "vm2");
-start("https://computernewb.com/collab-vm/vm3", "vm3");
-start("https://computernewb.com/collab-vm/vm4", "vm4");
-start("https://computernewb.com/collab-vm/vm5", "vm5");
-start("https://computernewb.com/collab-vm/vm6", "vm6");
-start("https://computernewb.com/collab-vm/vm7", "vm7");
-start("https://computernewb.com/collab-vm/vm8", "vm8");
+start("https://computernewb.com/collab-vm/vm9", "vm9", "test");
+
+autoMod.emitter.on('event', e => {
+    eventConnections.forEach(x => x.socket.send(JSON.stringify(e)));
+});
 
 fastify.setErrorHandler((error, _, reply) => {
     reply.status(503).send({ status: "error", message: error.message });
@@ -339,5 +529,5 @@ fastify.setNotFoundHandler((_, res) => {
 
 fastify.listen({ host: "127.0.0.1", port: 9876 }, (err, address) => {
     if (err) throw err;
-    console.log(`[libcvmts_test/fastify] Server is now listening on ${address}`);
+    console.log(`[specializedegg/fastify] Server is now listening on ${address}`);
 });

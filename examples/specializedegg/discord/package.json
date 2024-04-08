@@ -1,0 +1,17 @@
+{
+  "name": "specializedegg",
+  "version": "1.0.0",
+  "description": "Specialized Egg - Discord",
+  "main": "index.js",
+  "keywords": [],
+  "author": "MDMCK10",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.6.8",
+    "bufferutil": "^4.0.8",
+    "discord.js": "^14.13.0",
+    "dotenv": "^.6.4.5",
+    "utf-8-validate": "^6.0.3",
+    "zlib-sync": "^0.1.9"
+  }
+}

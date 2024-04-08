@@ -1,7 +1,7 @@
 import { Canvas, CanvasRenderingContext2D, Image, createCanvas } from "canvas";
 import WebSocket from "ws";
 import { ConnectionOptions } from "./ConnectionOptions";
-import { DefaultHeaders, Rank } from "./Constants";
+import { Rank } from "./Constants";
 import { Decode, Encode } from "./Guacamole";
 import { User } from "./User";
 import { VoteInfo } from "./VoteInfo";
@@ -78,23 +78,39 @@ export class VM {
         this.builtinHandlers.set("connect", (instr: string[]) => {
             if (instr[1] === '1') {
                 if (options.autologin) {
-                    this.websocket.send(Encode("admin", "2", options.password));
+                    if (options.token) {
+                        this.websocket.send(Encode("login", options.token));
+                    }else if (options.password) {
+                        this.websocket.send(Encode("admin", "2", options.password));
+                    }
                 }
                 this.connected = true;
                 return false;
             }
         });
 
+        if (options.token) {
+            this.builtinHandlers.set("login", (instr: string[]) => {
+                if (instr[1] != '1') {
+                    throw new Error(`Failed to login to ${this.options.vmName}, check your token.`);
+                }
+
+                return false;
+            });
+        }
+
         this.builtinHandlers.set("adduser", (instr: string[]) => {
             if (parseInt(instr[1]) > 1) {
                 // user list
                 instr.splice(0, 2);
                 for (let i = 0; i < instr.length; i += 2) {
-                    this.addOrEditUser(instr[i], instr[i + 1]);
+			this.addOrEditUser(instr[i], instr[i + 1]);
                 }
             } else {
                 // single user
-                this.addOrEditUser(instr[2], instr[3]);
+		if(instr.length === 4) {
+                  this.addOrEditUser(instr[2], instr[3]);
+		}
             }
         });
 
@@ -294,8 +310,17 @@ export class VM {
     };
 
     public async connect(): Promise<VM> {
+        if(this.options.password && this.options.token) {
+            throw new Error("Both token and password are set, you must only set one of them depending on which authentication method you want to use.");
+        }
+
+	    let url = new URL(this.url)
         this.websocket = new WebSocket(this.url, "guacamole", {
-            headers: DefaultHeaders
+            headers: {
+                'Origin': `https://computernewb.com`,
+                'Host': url.hostname,
+                'User-Agent': 'LibCVM.ts/0.0.2 (https://github.com/MDMCK10/libcvm.ts)'
+            }
         });
 
         this.websocket.onopen = () => {
@@ -343,7 +368,7 @@ export class VM {
         };
 
         this.websocket.onerror = (err) => {
-            console.log(`[libcvmts/websocket] Error: ${err.message}.`);
+            console.log(`[libcvmts/websocket] Error: ${err.message} while trying to connect to ${this.options.vmName}.`);
         };
 
         return new Promise((resolve, _) => {

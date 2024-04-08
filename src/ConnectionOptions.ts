@@ -3,6 +3,7 @@ export class ConnectionOptions {
     vmName: string;
     autologin: boolean = false;
     password: string;
+    token: string;
     maxReconnectionAttempts: number = 50;
 
     public constructor(init?:Partial<ConnectionOptions>) {

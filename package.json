@@ -1,6 +1,6 @@
 {
   "name": "libcvmts",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "A CollabVM client library written in TypeScript",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -18,12 +18,12 @@
   ],
   "license": "MIT",
   "devDependencies": {
-    "@types/events": "^3.0.0",
-    "@types/ws": "^8.5.5",
-    "typescript": "^5.2.2"
+    "@types/events": "^3.0.3",
+    "@types/ws": "^8.5.10",
+    "typescript": "^5.4.4"
   },
   "dependencies": {
     "canvas": "^2.11.2",
-    "ws": "^8.14.2"
+    "ws": "^8.16.0"
   }
 }
