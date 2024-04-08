@@ -441,6 +441,7 @@ async function start(vmurl: string, vmname: string, pass:string, passIsToken: bo
         if(args.length == 3 && args[1] != '') {
             insert_message.run(args[1], HTMLDecode(args[2]), vm.options.vmName);
             let user = vm.users.find(x => x.username === args[1]);
+            if(user === undefined) return;
             console.log(vm.options.vmName)
             console.log(vm.users)
             console.log(args);
