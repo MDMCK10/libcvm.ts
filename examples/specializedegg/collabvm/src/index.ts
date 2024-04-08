@@ -427,11 +427,12 @@ fastify.get("/api/v1/mod/getip/:username", { schema: { querystring: mod_api_sche
     return reply.send({status: "success", message: ips });
 });
 
-async function start(vmurl: string, vmname: string, pass:string) {
+async function start(vmurl: string, vmname: string, pass:string, passIsToken: boolean = false) {
 
     let vm = new VM(vmurl, new ConnectionOptions({
         autologin: autologin,
-        token: pass,
+        password: passIsToken ? null : pass,
+        token: passIsToken ? pass : null,
         botName: botname,
         vmName: vmname
     }));
@@ -513,7 +514,16 @@ async function start(vmurl: string, vmname: string, pass:string) {
     vms.push(vm);
 }
 
-start("https://computernewb.com/collab-vm/vm9", "vm9", "test");
+start("https://computernewb.com/collab-vm/vm0", "vm0b0t", "test");
+start("https://computernewb.com/collab-vm/vm1", "vm1", "test");
+start("https://computernewb.com/collab-vm/vm2", "vm2", "test");
+start("https://computernewb.com/collab-vm/vm3", "vm3", "test");
+start("https://computernewb.com/collab-vm/vm4", "vm4", "test");
+start("https://computernewb.com/collab-vm/vm5", "vm5", "test");
+start("https://computernewb.com/collab-vm/vm6", "vm6", "test");
+start("https://computernewb.com/collab-vm/vm7", "vm7", "test");
+start("https://computernewb.com/collab-vm/vm8", "vm8", "test");
+start("https://computernewb.com/collab-vm/vm9", "vm9", "test", true);
 
 autoMod.emitter.on('event', e => {
     eventConnections.forEach(x => x.socket.send(JSON.stringify(e)));
