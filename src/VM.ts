@@ -1,12 +1,12 @@
 import { Canvas, CanvasRenderingContext2D, Image, createCanvas } from "canvas";
-import WebSocket from "ws";
+import WebSocket, { EventEmitter } from "ws";
 import { ConnectionOptions } from "./ConnectionOptions";
 import { Rank } from "./Constants";
 import { Decode, Encode } from "./Guacamole";
 import { User } from "./User";
 import { VoteInfo } from "./VoteInfo";
 
-export class VM {
+export class VM extends EventEmitter {
     websocket: WebSocket;
 
     users: User[] = [];
@@ -35,6 +35,7 @@ export class VM {
     private builtinHandlers: Map<string, Function> = new Map<string, Function>();
 
     constructor(url: string, options: ConnectionOptions) {
+        super();
         this.url = url;
         this.options = options;
 
@@ -83,6 +84,7 @@ export class VM {
                     }else if (options.password) {
                         this.websocket.send(Encode("admin", "2", options.password));
                     }
+                    this.emit("connectedToNode");
                 }
                 this.connected = true;
                 return false;
@@ -242,6 +244,12 @@ export class VM {
         });
     }
 
+    public async SendChat(msg : string): Promise<boolean> {
+        if (!this.connected) return false;
+        this.websocket.send(Encode("chat", msg));
+        return true;
+    }
+
     public async Restore(): Promise<boolean> {
         if (!this.connected) return false;
         this.websocket.send(Encode("admin", "8", this.options.vmName));
@@ -315,12 +323,12 @@ export class VM {
         }
 
 	    let url = new URL(this.url)
+        let headers = this.options.customHeaders;
+        if (!headers["Origin"]) headers["Origin"] = `https://computernewb.com`;
+        if (!headers["Host"]) headers["Host"] = url.hostname;
+        if (!headers["User-Agent"]) headers["User-Agent"] = 'LibCVM.ts/0.0.2 (https://github.com/MDMCK10/libcvm.ts)';
         this.websocket = new WebSocket(this.url, "guacamole", {
-            headers: {
-                'Origin': `https://computernewb.com`,
-                'Host': url.hostname,
-                'User-Agent': 'LibCVM.ts/0.0.2 (https://github.com/MDMCK10/libcvm.ts)'
-            }
+            headers
         });
 
         this.websocket.onopen = () => {
@@ -370,6 +378,10 @@ export class VM {
         this.websocket.onerror = (err) => {
             console.log(`[libcvmts/websocket] Error: ${err.message} while trying to connect to ${this.options.vmName}.`);
         };
+
+        this.websocket.onclose = () => {
+            this.emit("disconnected");
+        }
 
         return new Promise((resolve, _) => {
             let timer = setInterval(() => {
