@@ -1,10 +1,11 @@
 import { Canvas, CanvasRenderingContext2D, Image, createCanvas } from "canvas";
-import WebSocket, { EventEmitter } from "ws";
+import WebSocket from "ws";
 import { ConnectionOptions } from "./ConnectionOptions";
 import { Rank } from "./Constants";
 import { Decode, Encode } from "./Guacamole";
 import { User } from "./User";
 import { VoteInfo } from "./VoteInfo";
+import { EventEmitter } from "events";
 
 export class VM extends EventEmitter {
     websocket: WebSocket;
