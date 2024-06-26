@@ -1,10 +1,10 @@
 import fastifyWebsocket, { SocketStream } from '@fastify/websocket';
-import { ConnectionOptions, VM } from "../../../../dist/index";
-import { User } from "../../../../dist/User";
-import { Rank } from "../../../../dist/Constants";
+import { ConnectionOptions, VM } from "../../../../dist/index.js";
+import { User } from "../../../../dist/User.js";
+import { Rank } from "../../../../dist/Constants.js";
 import Database from 'better-sqlite3';
 import Fastify from 'fastify';
-import { AutoMod, AutoModAction, AutoModRule } from "./automod";
+import { AutoMod, AutoModAction, AutoModRule } from "./automod.js";
 
 /* config */
 const botname = "Specialized Egg";
