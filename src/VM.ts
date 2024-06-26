@@ -345,7 +345,7 @@ export class VM extends EventEmitter {
 
         this.websocket.on('open', () => {
             this.nopReceived = Date.now();
-            this.websocket.addEventListener('close', () => {
+            this.websocket.on('close', () => {
                 this.users = [];
                 this.connected = false;
                 if (!this.reconnecting && !this.disconnecting) {
