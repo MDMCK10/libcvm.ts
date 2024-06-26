@@ -1,7 +1,7 @@
 import EventEmitter from 'node:events';
-import { User } from '../../../../dist/User';
-import { VM } from '../../../..//dist/VM';
-import { Encode } from '../../../../dist/Guacamole';
+import { User } from '../../../../dist/User.js';
+import { VM } from '../../../..//dist/VM.js';
+import { Encode } from '../../../../dist/Guacamole.js';
 
 export enum AutoModAction {
     LOG = "Log",

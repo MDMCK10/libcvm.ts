@@ -24,6 +24,8 @@
   },
   "dependencies": {
     "canvas": "^2.11.2",
+    "msgpackr": "^1.10.2",
     "ws": "^8.16.0"
-  }
+  },
+  "type": "module"
 }

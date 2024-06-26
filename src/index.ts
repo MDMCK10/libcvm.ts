@@ -1,3 +1,3 @@
-export { VM } from "./VM";
-export { ConnectionOptions } from "./ConnectionOptions"
-export * as Guacamole from "./Guacamole";
+export { VM } from "./VM.js";
+export { ConnectionOptions } from "./ConnectionOptions.js"
+export * as Guacamole from "./Guacamole.js";

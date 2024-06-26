@@ -23,5 +23,6 @@
     "@fastify/websocket": "8.3.1",
     "better-sqlite3": "^9.4.5",
     "fastify": "^4.26.2"
-  }
+  },
+  "type": "module"
 }
