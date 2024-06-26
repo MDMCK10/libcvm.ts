@@ -1,4 +1,4 @@
-import { Rank } from "./Constants";
+import { Rank } from "./Constants.js";
 
 export class User {
     username : string;

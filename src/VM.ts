@@ -1,11 +1,15 @@
 import { Canvas, CanvasRenderingContext2D, Image, createCanvas } from "canvas";
 import WebSocket from "ws";
-import { ConnectionOptions } from "./ConnectionOptions";
-import { Rank } from "./Constants";
-import { Decode, Encode } from "./Guacamole";
-import { User } from "./User";
-import { VoteInfo } from "./VoteInfo";
+import { ConnectionOptions } from "./ConnectionOptions.js";
+import { Rank } from "./Constants.js";
+import { Decode, Encode } from "./Guacamole.js";
+import { User } from "./User.js";
+import { VoteInfo } from "./VoteInfo.js";
 import { EventEmitter } from "events";
+import { CollabVMProtocolMessage, CollabVMProtocolMessageType } from "./collab-vm-1.2-binary-protocol/src/index.js";
+import * as msgpack from "msgpackr";
+
+const capabilities = [ "bin" ];
 
 export class VM extends EventEmitter {
     websocket: WebSocket;
@@ -149,7 +153,10 @@ export class VM extends EventEmitter {
         this.builtinHandlers.set("png", (instr: string[]) => {
             if (instr[2] === '0') {
                 const img = new Image();
-                img.onload = () => this.displayCtx.drawImage(img, parseInt(instr[3]), parseInt(instr[4]));
+                img.onload = () => {
+                    this.displayCtx.drawImage(img, parseInt(instr[3]), parseInt(instr[4]));
+                    this.emit('rect', img);
+                }
                 img.src = `data:image/jpeg;base64,${instr[5]}`;
             }
         });
@@ -318,6 +325,10 @@ export class VM extends EventEmitter {
         return promise;
     };
 
+    public getScreenshot(): Buffer {
+        return this.display.toBuffer("image/jpeg");
+    }
+
     public async connect(): Promise<VM> {
         if(this.options.password && this.options.token) {
             throw new Error("Both token and password are set, you must only set one of them depending on which authentication method you want to use.");
@@ -332,9 +343,9 @@ export class VM extends EventEmitter {
             headers
         });
 
-        this.websocket.onopen = () => {
+        this.websocket.on('open', () => {
             this.nopReceived = Date.now();
-            this.websocket.onclose = () => {
+            this.websocket.addEventListener('close', () => {
                 this.users = [];
                 this.connected = false;
                 if (!this.reconnecting && !this.disconnecting) {
@@ -342,7 +353,7 @@ export class VM extends EventEmitter {
                     this.reconnecting = true;
                     this.reconnect();
                 }
-            };
+            });
 
             this.nopTimer = setInterval(() => {
                 if (Date.now() - this.nopReceived > 10000) {
@@ -353,36 +364,22 @@ export class VM extends EventEmitter {
             }, 1000);
 
             this.websocket.send(Encode("rename", this.options.botName));
+            if (capabilities.length > 0) this.websocket.send(Encode("cap", ...capabilities));
             this.websocket.send(Encode("connect", this.options.vmName));
-        };
+        });
 
-        this.websocket.onmessage = (ev) => {
-            this.nopReceived = Date.now();
-            let content = Decode(ev.data.toString());
-            let defaultHandler = this.builtinHandlers.get(content[0]);
-            if (defaultHandler !== undefined) {
-                if (defaultHandler.call(this, content) === false) {
-                    return;
-                };
-            }
+        this.websocket.on('message', (data, isBinary) => {
+            if (isBinary) this.handleBinaryMsg(data as Buffer);
+            else this.handleTextMsg(data.toString());
+        });
 
-            let customHandlers = this.customHandlers.get(content[0]);
-            if (customHandlers !== undefined) {
-                customHandlers.forEach(handler => {
-                    if (handler.call(this, content) === false) {
-                        return;
-                    }
-                });
-            }
-        };
-
-        this.websocket.onerror = (err) => {
+        this.websocket.on('error', (err) => {
             console.log(`[libcvmts/websocket] Error: ${err.message} while trying to connect to ${this.options.vmName}.`);
-        };
+        });
 
-        this.websocket.onclose = () => {
+        this.websocket.on('close', () => {
             this.emit("disconnected");
-        }
+        });
 
         return new Promise((resolve, _) => {
             let timer = setInterval(() => {
@@ -398,5 +395,48 @@ export class VM extends EventEmitter {
                 }
             }, 10);
         });
+    }
+
+    private handleBinaryMsg(data: Buffer) {
+        let msg: CollabVMProtocolMessage;
+        try {
+            msg = msgpack.decode(data);
+        } catch (e) {
+            console.log(`[libcvmts/binproto] Error: ${(e as Error).message} while trying to decode binary message.`);
+            return;
+        }
+        if (msg.type === undefined) return;
+        switch (msg.type) {
+            case CollabVMProtocolMessageType.rect: {
+                if (!msg.rect || msg.rect.x === undefined || msg.rect.y === undefined || msg.rect.data === undefined) return;
+                let img = new Image();
+                img.onload = () => {
+                    this.displayCtx.drawImage(img, msg.rect.x, msg.rect.y)
+                    this.emit('rect', img);
+                };
+                img.src = Buffer.from(msg.rect.data);
+                break;
+            }
+        }
+    }
+
+    private handleTextMsg(data: string) {
+        this.nopReceived = Date.now();
+        let content = Decode(data);
+        let defaultHandler = this.builtinHandlers.get(content[0]);
+        if (defaultHandler !== undefined) {
+            if (defaultHandler.call(this, content) === false) {
+                return;
+            };
+        }
+
+        let customHandlers = this.customHandlers.get(content[0]);
+        if (customHandlers !== undefined) {
+            customHandlers.forEach(handler => {
+                if (handler.call(this, content) === false) {
+                    return;
+                }
+            });
+        }
     }
 };
